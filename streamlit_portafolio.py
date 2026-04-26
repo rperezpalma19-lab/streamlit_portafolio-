@@ -295,7 +295,7 @@ st.pyplot(fig_acum, clear_figure=True)
 # Frontera eficiente
 if construir_frontier:
     st.subheader("Frontera eficiente")
-    df_frontier = construir_frontera(mu_a.flatten(), cov_a, rf, bounds, shorting, npts=60)
+    df_frontier = construir_frontera(mu_a, cov_a, rf, bounds, shorting, npts=60)
     fig_front = fig_frontera(df_frontier, r_opt=ret_opt, v_opt=vol_opt, s_opt=sharpe_opt)
     st.pyplot(fig_front, clear_figure=True)
 
