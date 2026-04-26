@@ -1,7 +1,6 @@
 # streamlit_portafolio.py
 # -------------------------------------------------------------
 # Portafolio de Acciones con Yahoo Finance + Optimización
-# (Versión corregida y robusta)
 # -------------------------------------------------------------
 
 import warnings
@@ -24,7 +23,7 @@ st.title("📈 Portafolio de Acciones")
 st.caption("Optimización: Mín Var / Máx Sharpe")
 
 # =========================
-# HELPERS (CLAVE)
+# HELPERS
 # =========================
 def to_col(x):
     x = np.array(x)
@@ -60,7 +59,7 @@ def anualizar(mu, cov, freq):
     return mu*f, cov*f
 
 # =========================
-# MÉTRICAS (FIX PRINCIPAL)
+# MÉTRICAS
 # =========================
 def port_stats(w, mu, cov, rf=0):
     w = to_col(w)
@@ -73,6 +72,7 @@ def port_stats(w, mu, cov, rf=0):
     ret = float(w.T @ mu)
     vol = float(np.sqrt(w.T @ cov @ w))
     sharpe = (ret - rf) / vol if vol > 0 else np.nan
+
     return ret, vol, sharpe
 
 # =========================
@@ -135,7 +135,7 @@ def frontera(mu, cov, rf, bounds, shorting):
     return pd.DataFrame(results, columns=["ret","vol","sharpe"])
 
 # =========================
-# SIDEBAR
+# SIDEBAR (FIX CLAVE AQUÍ)
 # =========================
 with st.sidebar:
 
@@ -144,8 +144,11 @@ with st.sidebar:
     start = st.date_input("Inicio", date.today()-timedelta(days=365*3))
     end = st.date_input("Fin", date.today())
 
-    freq = st.selectbox("Frecuencia", {"Diaria":"1d","Semanal":"1wk","Mensual":"1mo"})
-    freq_code = {"1d":"D","1wk":"W","1mo":"M"}[freq]
+    freq_options = {"Diaria":"1d","Semanal":"1wk","Mensual":"1mo"}
+    freq_label = st.selectbox("Frecuencia", list(freq_options.keys()))
+    intervalo = freq_options[freq_label]
+
+    freq_code = {"1d":"D","1wk":"W","1mo":"M"}[intervalo]
 
     metodo = st.selectbox("Método", ["Igualitario","Mín Var","Máx Sharpe","Riesgo Mín con retorno objetivo"])
     rf = st.number_input("Rf", value=0.02)
@@ -160,7 +163,7 @@ with st.sidebar:
 # =========================
 # RUN
 # =========================
-precios = descargar_precios(tickers, start, end, freq)
+precios = descargar_precios(tickers, start, end, intervalo)
 
 ret = calcular_retornos(precios)
 
@@ -192,8 +195,8 @@ df = frontera(mu, cov, rf, bounds, shorting)
 fig, ax = plt.subplots()
 ax.plot(df["vol"], df["ret"])
 ax.scatter(v,r)
-ax.set_xlabel("Vol")
-ax.set_ylabel("Ret")
+ax.set_xlabel("Volatilidad")
+ax.set_ylabel("Retorno")
 ax.set_title("Frontera eficiente")
 
 st.pyplot(fig)
