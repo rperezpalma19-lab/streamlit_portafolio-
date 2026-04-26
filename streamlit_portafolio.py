@@ -129,7 +129,7 @@ def optimizar_pesos(mu, cov, rf, metodo, bounds, shorting, target_ret=None):
 
     if metodo == "Máx Sharpe":
         def neg_sharpe(w):
-            r, v, s = port_stats(w, mu, cov, rf)
+            ret = float(w.T @ mu)
             return -s
         res = minimize(neg_sharpe, w0, method="SLSQP", bounds=bnds, constraints=cons)
         return res.x
