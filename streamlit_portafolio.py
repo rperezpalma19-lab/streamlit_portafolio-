@@ -235,3 +235,33 @@ df_frontier = construir_frontera(mu_a, cov_a, rf, bounds, shorting)
 
 fig = fig_frontera(df_frontier, ret_opt, vol_opt, sharpe_opt)
 st.pyplot(fig)
+
+
+# Exportables
+with st.expander("Descargas"):
+    st.download_button(
+        "Descargar precios (CSV)",
+        data=descargar_csv(precios, "precios.csv"),
+        file_name="precios.csv",
+        mime="text/csv"
+    )
+    st.download_button(
+        "Descargar retornos (CSV)",
+        data=descargar_csv(ret_diarios, "retornos.csv"),
+        file_name="retornos.csv",
+        mime="text/csv"
+    )
+    st.download_button(
+        "Descargar pesos óptimos (CSV)",
+        data=descargar_csv(tabla_pesos, "pesos_optimos.csv"),
+        file_name="pesos_optimos.csv",
+        mime="text/csv"
+    )
+
+st.info(
+    "💡 Sugerencias: \n"
+    "- Cambia el intervalo (diario/semanal/mensual) según tu horizonte.\n"
+    "- Ajusta **peso mínimo/máximo** para concentrar o diversificar.\n"
+    "- Usa **Riesgo mínimo con retorno objetivo** para fijar un target anual.\n"
+    "- Activa *shorting* solo si entiendes el apalancamiento implícito."
+)
