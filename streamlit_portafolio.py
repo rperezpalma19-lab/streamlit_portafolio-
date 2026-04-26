@@ -335,3 +335,4 @@ st.info(
     "- Usa **Riesgo mínimo con retorno objetivo** para fijar un target anual.\n"
     "- Activa *shorting* solo si entiendes el apalancamiento implícito."
 )
+
