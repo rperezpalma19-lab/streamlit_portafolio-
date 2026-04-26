@@ -21,7 +21,7 @@ st.caption("Optimización: Mín Var / Máx Sharpe")
 # HELPERS
 # =========================
 def to_col(x):
-    x = np.array(x)
+    x = np.asarray(x, dtype=float)
     return x.reshape(-1, 1) if x.ndim == 1 else x
 
 # =========================
@@ -64,7 +64,7 @@ def descargar_precios(tickers, start, end, interval):
             return pd.DataFrame()
         return pd.concat(precios, axis=1)
 
-    # Fallback raro
+    # Fallback
     if "Close" in data.columns:
         return data["Close"].to_frame(name=tickers[0])
 
@@ -78,18 +78,19 @@ def anualizar(mu, cov, freq):
     return mu*f, cov*f
 
 # =========================
-# MÉTRICAS
+# MÉTRICAS (FIX DEFINITIVO)
 # =========================
 def port_stats(w, mu, cov, rf=0):
-    w = to_col(w)
-    mu = to_col(mu)
-    cov = np.array(cov)
+
+    w = np.asarray(w, dtype=float).reshape(-1, 1)
+    mu = np.asarray(mu, dtype=float).reshape(-1, 1)
+    cov = np.asarray(cov, dtype=float)
 
     if w.shape[0] != mu.shape[0]:
         raise ValueError(f"Dim mismatch: w{w.shape}, mu{mu.shape}")
 
-    ret = float(w.T @ mu)
-    vol = float(np.sqrt(w.T @ cov @ w))
+    ret = float(np.dot(w.T, mu))
+    vol = float(np.sqrt(np.dot(w.T, np.dot(cov, w))))
     sharpe = (ret - rf) / vol if vol > 0 else np.nan
 
     return ret, vol, sharpe
@@ -100,6 +101,7 @@ def port_stats(w, mu, cov, rf=0):
 def optimizar_pesos(mu, cov, rf, metodo, bounds, shorting, target_ret=None):
 
     mu = to_col(mu)
+    cov = np.asarray(cov, dtype=float)
     n = mu.shape[0]
 
     if shorting:
@@ -116,22 +118,22 @@ def optimizar_pesos(mu, cov, rf, metodo, bounds, shorting, target_ret=None):
     if metodo == "Mín Var":
         obj = lambda w: w @ cov @ w
         res = minimize(obj, w0, method="SLSQP", bounds=bnds, constraints=cons)
-        return res.x
+        return np.asarray(res.x, dtype=float)
 
     if metodo == "Máx Sharpe":
         obj = lambda w: -port_stats(w, mu, cov, rf)[2]
         res = minimize(obj, w0, method="SLSQP", bounds=bnds, constraints=cons)
-        return res.x
+        return np.asarray(res.x, dtype=float)
 
     if metodo == "Riesgo Mín con retorno objetivo":
         if target_ret is None:
             target_ret = float(mu.mean())
 
-        cons.append({"type":"eq","fun":lambda w: (w @ mu).item() - target_ret})
+        cons.append({"type":"eq","fun":lambda w: (np.dot(w, mu).item()) - target_ret})
 
         obj = lambda w: w @ cov @ w
         res = minimize(obj, w0, method="SLSQP", bounds=bnds, constraints=cons)
-        return res.x
+        return np.asarray(res.x, dtype=float)
 
     return w0
 
@@ -140,9 +142,10 @@ def optimizar_pesos(mu, cov, rf, metodo, bounds, shorting, target_ret=None):
 # =========================
 def frontera(mu, cov, rf, bounds, shorting):
     mu = to_col(mu)
-    targets = np.linspace(mu.min(), mu.max(), 50)
 
+    targets = np.linspace(mu.min(), mu.max(), 50)
     results = []
+
     for t in targets:
         w = optimizar_pesos(mu, cov, rf, "Riesgo Mín con retorno objetivo", bounds, shorting, t)
         r,v,s = port_stats(w, mu, cov, rf)
