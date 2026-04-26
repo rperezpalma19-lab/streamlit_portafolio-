@@ -1,8 +1,3 @@
-# streamlit_portafolio.py
-# -------------------------------------------------------------
-# Portafolio de Acciones con Yahoo Finance + Optimización
-# -------------------------------------------------------------
-
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -30,10 +25,11 @@ def to_col(x):
     return x.reshape(-1, 1) if x.ndim == 1 else x
 
 # =========================
-# DATA
+# DATA (ROBUSTO)
 # =========================
 @st.cache_data
 def descargar_precios(tickers, start, end, interval):
+
     data = yf.download(
         tickers=tickers,
         start=start,
@@ -41,15 +37,38 @@ def descargar_precios(tickers, start, end, interval):
         interval=interval,
         auto_adjust=True,
         progress=False,
+        group_by="ticker"
     )
 
-    if len(tickers) == 1:
-        close = data["Close"].to_frame(tickers[0])
-    else:
-        close = pd.concat([data[t]["Close"] for t in tickers], axis=1)
-        close.columns = tickers
+    if data.empty:
+        return pd.DataFrame()
 
-    return close.dropna(how="all")
+    # 1 ticker
+    if len(tickers) == 1:
+        try:
+            return data["Close"].to_frame(tickers[0])
+        except:
+            return pd.DataFrame()
+
+    # MultiIndex
+    if isinstance(data.columns, pd.MultiIndex):
+        precios = []
+        for t in tickers:
+            if t in data.columns.get_level_values(0):
+                try:
+                    serie = data[t]["Close"].rename(t)
+                    precios.append(serie)
+                except:
+                    pass
+        if len(precios) == 0:
+            return pd.DataFrame()
+        return pd.concat(precios, axis=1)
+
+    # Fallback raro
+    if "Close" in data.columns:
+        return data["Close"].to_frame(name=tickers[0])
+
+    return pd.DataFrame()
 
 def calcular_retornos(precios):
     return precios.pct_change().dropna()
@@ -89,7 +108,6 @@ def optimizar_pesos(mu, cov, rf, metodo, bounds, shorting, target_ret=None):
         bnds = tuple((max(0, bounds[0]), bounds[1]) for _ in range(n))
 
     cons = [{"type":"eq","fun":lambda w: np.sum(w)-1}]
-
     w0 = np.ones(n)/n
 
     if metodo == "Igualitario":
@@ -101,8 +119,7 @@ def optimizar_pesos(mu, cov, rf, metodo, bounds, shorting, target_ret=None):
         return res.x
 
     if metodo == "Máx Sharpe":
-        def obj(w):
-            return -port_stats(w, mu, cov, rf)[2]
+        obj = lambda w: -port_stats(w, mu, cov, rf)[2]
         res = minimize(obj, w0, method="SLSQP", bounds=bnds, constraints=cons)
         return res.x
 
@@ -123,10 +140,9 @@ def optimizar_pesos(mu, cov, rf, metodo, bounds, shorting, target_ret=None):
 # =========================
 def frontera(mu, cov, rf, bounds, shorting):
     mu = to_col(mu)
-
     targets = np.linspace(mu.min(), mu.max(), 50)
-    results = []
 
+    results = []
     for t in targets:
         w = optimizar_pesos(mu, cov, rf, "Riesgo Mín con retorno objetivo", bounds, shorting, t)
         r,v,s = port_stats(w, mu, cov, rf)
@@ -135,11 +151,15 @@ def frontera(mu, cov, rf, bounds, shorting):
     return pd.DataFrame(results, columns=["ret","vol","sharpe"])
 
 # =========================
-# SIDEBAR (FIX CLAVE AQUÍ)
+# SIDEBAR
 # =========================
 with st.sidebar:
 
-    tickers = st.text_input("Tickers", "AAPL,MSFT,NVDA").split(",")
+    tickers = [
+        t.strip().upper()
+        for t in st.text_input("Tickers", "AAPL,MSFT,NVDA").split(",")
+        if t.strip()
+    ]
 
     start = st.date_input("Inicio", date.today()-timedelta(days=365*3))
     end = st.date_input("Fin", date.today())
@@ -151,19 +171,23 @@ with st.sidebar:
     freq_code = {"1d":"D","1wk":"W","1mo":"M"}[intervalo]
 
     metodo = st.selectbox("Método", ["Igualitario","Mín Var","Máx Sharpe","Riesgo Mín con retorno objetivo"])
-    rf = st.number_input("Rf", value=0.02)
+    rf = st.number_input("Tasa libre de riesgo", value=0.02)
 
     bounds = (0.0,1.0)
-    shorting = st.checkbox("Shorting")
+    shorting = st.checkbox("Permitir shorting")
 
     target = None
     if metodo == "Riesgo Mín con retorno objetivo":
-        target = st.number_input("Target", 0.1)
+        target = st.number_input("Retorno objetivo", 0.1)
 
 # =========================
 # RUN
 # =========================
 precios = descargar_precios(tickers, start, end, intervalo)
+
+if precios.empty:
+    st.error("No se pudieron descargar precios. Verifica los tickers.")
+    st.stop()
 
 ret = calcular_retornos(precios)
 
@@ -179,12 +203,12 @@ r,v,s = port_stats(w, mu, cov, rf)
 # =========================
 # OUTPUT
 # =========================
-st.subheader("Pesos")
-st.dataframe(pd.DataFrame({"Peso":w}, index=tickers))
+st.subheader("Pesos óptimos")
+st.dataframe(pd.DataFrame({"Peso":w}, index=precios.columns))
 
 c1,c2,c3 = st.columns(3)
 c1.metric("Retorno", f"{r:.2%}")
-c2.metric("Vol", f"{v:.2%}")
+c2.metric("Volatilidad", f"{v:.2%}")
 c3.metric("Sharpe", f"{s:.2f}")
 
 # =========================
@@ -198,5 +222,6 @@ ax.scatter(v,r)
 ax.set_xlabel("Volatilidad")
 ax.set_ylabel("Retorno")
 ax.set_title("Frontera eficiente")
+ax.grid(True)
 
 st.pyplot(fig)
